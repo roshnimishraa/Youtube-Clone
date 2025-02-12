@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { toggleMenu } from '../utils/appSlice';
 import { YOUTUBE_SEARCH_API } from '../utils/constant';
+import store from '../utils/store';
+import { cacheResults } from '../utils/searchSlice';
 
 const Head = () => {
   // Adding search functionality
@@ -10,14 +12,34 @@ const Head = () => {
   // Search results
   const [suggestions, setSuggestions] = useState([]);
 
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // reading the cache 
+  const searchCache = useSelector((store)=> store.search);
+// const dispatch = useDispatch();
+
+
+/**
+ * searchCache = {
+ *   "iphone": ["iphone 11", "iphone 14"]
+ * }
+ * searchQuery = iphone
+ */
+
   // Debouncing
   // Every time searchQuery changes, make an API call
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery.trim()) {
-        getSearchSuggestions();
-      }
-    }, 200);
+
+    // cache logic
+  if(searchCache[searchQuery])
+  {
+    setSuggestions(searchCache[searchQuery]);
+  }
+  else{
+    getSearchSuggestions();
+  }
+ }, 200);
     return () => {
       clearTimeout(timer);
     };
@@ -25,13 +47,36 @@ const Head = () => {
 
   const getSearchSuggestions = async () => {
     try {
+      console.log("API CALL: "+searchQuery);
+
       const data = await fetch(YOUTUBE_SEARCH_API + searchQuery);
       const json = await data.json(); 
       setSuggestions(json[1] || []); 
+
+      // update cache 
+      dispatch(cacheResults({
+        // iphone: [1,2,3]
+  [searchQuery]: json[1],
+      }));
+
+
     } catch (error) {
       console.error("Error fetching suggestions:", error);
     }
   };
+
+  // handle Search Results scroll 
+  const handleScroll = () => {
+    setShowSuggestions(false);
+  };
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
 
   const dispatch = useDispatch();
 
@@ -67,6 +112,10 @@ const Head = () => {
             type='text'
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={()=> setShowSuggestions(true)}
+            onBlur={() => setShowSuggestions(false)}
+         
+          
           />
           <button
             className='border border-gray-400 p-2 rounded-r-full px-5 py-2 bg-gray-100'
@@ -76,7 +125,8 @@ const Head = () => {
         </div>
 
         {/* Search Results */}
-        {suggestions.length > 0 && (
+        
+        {showSuggestions && (
           <div className="fixed bg-white py-2 px-2 w-[37rem] shadow-lg rounded-lg border border-gray-100">
             <ul>
               {suggestions.map((s) => (
